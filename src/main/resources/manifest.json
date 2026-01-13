@@ -1,0 +1,11 @@
+{
+    "Group": "Community",
+    "Name": "HomeEssentials",
+    "Version": "1.0.0",
+    "Main": "com.homeessentials.HomeEssentials",
+    "Description": "User-friendly home management plugin with multiple named homes, permission-based limits, and teleport warmup",
+    "Authors": [],
+    "Website": "",
+    "Dependencies": {},
+    "OptionalDependencies": {}
+}
