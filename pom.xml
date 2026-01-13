@@ -16,6 +16,8 @@
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Override this for CI builds: -Dhytale.server.path=/path/to/HytaleServer.jar -->
+        <hytale.server.path>${project.basedir}/../../HytaleServer.jar</hytale.server.path>
     </properties>
 
     <dependencies>
@@ -25,10 +27,10 @@
             <artifactId>HytaleServer</artifactId>
             <version>1.0.0</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/../../HytaleServer.jar</systemPath>
+            <systemPath>${hytale.server.path}</systemPath>
         </dependency>
 
-        <!-- JSON processing - Gson is likely already in Hytale, mark as provided -->
+        <!-- JSON processing - Gson is provided by Hytale -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
