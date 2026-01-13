@@ -31,7 +31,6 @@ public class HomeCommand extends AbstractPlayerCommand {
 
         this.nameArg = withOptionalArg("name", "Name of the home to teleport to (default: home)", ArgTypes.STRING);
 
-        requirePermission("homes.use");
     }
 
     @Override

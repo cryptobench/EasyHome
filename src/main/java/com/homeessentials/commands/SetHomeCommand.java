@@ -38,7 +38,6 @@ public class SetHomeCommand extends AbstractPlayerCommand {
 
         this.nameArg = withOptionalArg("name", "Name for this home (default: home)", ArgTypes.STRING);
 
-        requirePermission("homes.use");
     }
 
     @Override
