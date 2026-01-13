@@ -195,8 +195,8 @@ if (player.hasPermission("myplugin.admin")) {
 
 // Console commands for permission management:
 // perm user add <player> <permission>
-// perm group add <group> <permission>
-// perm group remove <group> <permission>
+// perm group add Adventure <permission>
+// perm group remove Adventure <permission>
 ```
 
 ## Data Storage
@@ -329,7 +329,7 @@ plugin reload Group:PluginName       # Reload a plugin
 
 # Permissions
 perm user add <player> <permission>
-perm group add <group> <permission>
+perm group add Adventure <permission>
 op add <player>                      # Make player operator
 ```
 
