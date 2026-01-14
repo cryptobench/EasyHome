@@ -1,376 +1,285 @@
-# Hytale Plugin Development Guide
+# EasyHome Plugin - Development Context
 
-## Overview
-This document contains learnings from developing the HomeEssentials plugin for Hytale servers.
+## Project Overview
+A home teleportation plugin for Hytale servers with configurable limits and warmup delays.
 
-## Project Structure
+## How to Explore the Hytale Server API
 
+The Hytale server API is in `Server/HytaleServer.jar`. Since there's no official documentation, use these commands to discover available classes and methods:
+
+### List All Classes in a Package
+```bash
+cd "/Users/golemgrid/Library/Application Support/Hytale/install/release/package/game/latest/Server"
+
+# Find all event-related classes
+jar -tf HytaleServer.jar | grep -i "event"
+
+# Find player-related classes
+jar -tf HytaleServer.jar | grep -i "player"
+
+# Find all classes in a specific package
+jar -tf HytaleServer.jar | grep "com/hypixel/hytale/server/core/event/events/"
+```
+
+### Inspect a Class (Methods, Fields, Signatures)
+```bash
+# Basic class inspection
+javap -classpath HytaleServer.jar com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent
+
+# With more detail (private members too)
+javap -p -classpath HytaleServer.jar com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent
+```
+
+### Key Packages to Explore
+```
+com.hypixel.hytale.server.core.plugin        # JavaPlugin, PluginBase
+com.hypixel.hytale.server.core.event.events  # All events
+com.hypixel.hytale.server.core.command       # Command system
+com.hypixel.hytale.server.core.entity        # Entity/Player classes
+com.hypixel.hytale.component                 # ECS system (Store, Ref, Query)
+com.hypixel.hytale.component.system          # EntityEventSystem, EcsEvent
+com.hypixel.hytale.event                     # EventRegistry
+com.hypixel.hytale.math.vector               # Vector3d, Vector3f, Vector3i
+com.hypixel.hytale.protocol                  # InteractionType, etc.
+```
+
+## Hytale Server Plugin Development
+
+### Plugin Structure
 ```
 plugins/PluginName/
 ├── src/main/java/com/yourplugin/
-│   ├── YourPlugin.java           # Main plugin class
-│   ├── commands/                  # Command classes
+│   ├── YourPlugin.java           # Extends JavaPlugin
+│   ├── commands/                  # Extend AbstractPlayerCommand
+│   ├── listeners/                 # Event handlers
+│   ├── systems/                   # ECS EntityEventSystems
 │   └── data/                      # Data classes
 ├── src/main/resources/
-│   └── manifest.json              # Plugin manifest (REQUIRED)
-├── pom.xml                        # Maven build file
-└── target/
-    └── PluginName-1.0.0.jar       # Built JAR goes in mods/ folder
+│   └── manifest.json              # MUST use PascalCase fields
+├── pom.xml
+└── target/PluginName-1.0.0.jar   # Goes in Server/mods/
 ```
 
-## manifest.json (CRITICAL)
-
-The manifest MUST use **PascalCase** field names:
-
+### manifest.json (PascalCase Required!)
 ```json
 {
-    "Group": "YourGroup",
-    "Name": "PluginName",
+    "Group": "cryptobench",
+    "Name": "EasyHome",
     "Version": "1.0.0",
-    "Main": "com.yourplugin.YourPlugin",
-    "Description": "Plugin description",
+    "Main": "com.easyhome.EasyHome",
+    "Description": "Description here",
     "Authors": [],
-    "Website": "",
-    "Dependencies": {},
-    "OptionalDependencies": {}
+    "Dependencies": {}
 }
 ```
 
-**Important:** Using lowercase field names (e.g., `name` instead of `Name`) will cause validation errors!
-
-## Main Plugin Class
-
-Extend `JavaPlugin` (NOT `PluginBase`) for external plugins:
-
+### Main Plugin Class
 ```java
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 
 public class YourPlugin extends JavaPlugin {
-
-    public YourPlugin(JavaPluginInit init) {
-        super(init);
-    }
+    public YourPlugin(JavaPluginInit init) { super(init); }
 
     @Override
     public void setup() {
-        // Register commands, initialize storage
-        getCommandRegistry().registerCommand(new YourCommand(this));
+        // Register commands, events, systems
+        getCommandRegistry().registerCommand(new YourCommand());
+        getEventRegistry().registerGlobal(EventType.class, this::handler);
+        getEntityStoreRegistry().registerSystem(new YourSystem());
     }
 
     @Override
-    public void start() {
-        // Called after setup
+    public void start() { }
+
+    @Override
+    public void shutdown() { }
+}
+```
+
+### Available Registries (from PluginBase)
+```java
+getEventRegistry()           // For IBaseEvent events (PlayerInteractEvent, etc.)
+getEntityStoreRegistry()     // For ECS systems and components on entities
+getChunkStoreRegistry()      // For ECS systems and components on chunks
+getCommandRegistry()         // For commands
+getBlockStateRegistry()      // For block states
+getEntityRegistry()          // For entity types
+getTaskRegistry()            // For scheduled tasks
+getDataDirectory()           // Plugin data folder: mods/Group_PluginName/
+```
+
+## Two Event Systems in Hytale
+
+### 1. Standard Events (EventRegistry)
+Events implementing `IBaseEvent<KeyType>`. Registered via EventRegistry.
+
+```java
+// Registration
+eventRegistry.registerGlobal(PlayerInteractEvent.class, this::onPlayerInteract);
+eventRegistry.register(PlayerConnectEvent.class, this::onConnect);  // Instance-specific
+
+// Handler
+private void onPlayerInteract(PlayerInteractEvent event) {
+    Player player = event.getPlayer();
+    Vector3i block = event.getTargetBlock();
+    InteractionType action = event.getActionType();
+    event.setCancelled(true);  // Cancel the event
+}
+```
+
+**Available Player Events:**
+- `PlayerInteractEvent` - player interactions (has getPlayer(), getTargetBlock(), getActionType())
+- `PlayerConnectEvent` - player joins
+- `PlayerDisconnectEvent` - player leaves
+- `PlayerChatEvent` - chat messages
+
+### 2. ECS Events (EntityEventSystem)
+Events extending `EcsEvent`. **Cannot use EventRegistry** - need EntityEventSystem.
+
+```java
+public class MyProtectionSystem extends EntityEventSystem<EntityStore, BreakBlockEvent> {
+
+    public MyProtectionSystem() {
+        super(BreakBlockEvent.class);
     }
 
     @Override
-    public void shutdown() {
-        // Cleanup, save data
+    public Query<EntityStore> getQuery() {
+        return Query.any();  // Required - match all entities
+    }
+
+    @Override
+    public void handle(int entityIndex, ArchetypeChunk<EntityStore> chunk,
+                       Store<EntityStore> store, CommandBuffer<EntityStore> commandBuffer,
+                       BreakBlockEvent event) {
+        Vector3i block = event.getTargetBlock();
+        event.setCancelled(true);  // Cancel the event
     }
 }
+
+// Registration in plugin setup()
+getEntityStoreRegistry().registerSystem(new MyProtectionSystem());
+```
+
+**Available ECS Block Events:**
+- `BreakBlockEvent` - block destroyed (getTargetBlock(), setCancelled())
+- `DamageBlockEvent` - block taking damage (getTargetBlock(), getDamage(), setDamage(), setCancelled())
+- `PlaceBlockEvent` - block placed (getTargetBlock(), setCancelled())
+- `UseBlockEvent.Pre` - block used/chest opened (getTargetBlock(), getContext(), setCancelled())
+
+**Key Difference:** ECS events don't have player info directly! Must track via PlayerInteractEvent.
+
+## InteractionType Enum
+```java
+Primary         // Left click - break/attack
+Secondary       // Right click - place/use
+Use             // Use action
+Pick            // Pick block (middle click)
+Pickup          // Pick up item
+Ability1/2/3    // Abilities
+// ... and more
 ```
 
 ## Commands
-
-Extend `AbstractPlayerCommand` for player-only commands:
-
 ```java
-import com.hypixel.hytale.server.core.command.system.CommandContext;
-import com.hypixel.hytale.server.core.command.system.arguments.system.OptionalArg;
-import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
-import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
-import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
+public class MyCommand extends AbstractPlayerCommand {
+    private final OptionalArg<String> arg;
 
-public class YourCommand extends AbstractPlayerCommand {
-
-    private final OptionalArg<String> optionalArg;
-    private final RequiredArg<String> requiredArg;
-
-    public YourCommand(YourPlugin plugin) {
-        super("commandname", "Command description");
-
-        // Optional argument
-        this.optionalArg = withOptionalArg("argname", "Arg description", ArgTypes.STRING);
-
-        // Required argument
-        this.requiredArg = withRequiredArg("argname", "Arg description", ArgTypes.STRING);
-
-        // Require permission
-        requirePermission("yourplugin.use");
+    public MyCommand() {
+        super("commandname", "Description");
+        this.arg = withOptionalArg("argname", "desc", ArgTypes.STRING);
+        // Or: withRequiredArg(...)
+        requirePermission("myplugin.use");
     }
 
     @Override
-    protected void execute(@Nonnull CommandContext ctx,
-                          @Nonnull Store<EntityStore> store,
-                          @Nonnull Ref<EntityStore> playerRef,
-                          @Nonnull PlayerRef playerData,
-                          @Nonnull World world) {
-
-        // Get argument values
-        String optional = optionalArg.get(ctx);
-        String required = requiredArg.get(ctx);
-
-        // Get Player component for permissions
+    protected void execute(CommandContext ctx, Store<EntityStore> store,
+                          Ref<EntityStore> playerRef, PlayerRef playerData, World world) {
+        String value = arg.get(ctx);
         Player player = store.getComponent(playerRef, Player.getComponentType());
-
-        // Check permissions
-        if (player.hasPermission("some.permission")) {
-            // ...
-        }
-
-        // Send messages
-        playerData.sendMessage(Message.raw("Hello!").color(new Color(85, 255, 85)));
+        playerData.sendMessage(Message.raw("Hello").color(new Color(85, 255, 85)));
     }
 }
 ```
 
-## Messages & Colors
-
-Hytale uses a fluent API for messages - NOT Minecraft color codes (§):
-
+## Messages (No Minecraft Color Codes!)
 ```java
 import com.hypixel.hytale.server.core.Message;
 import java.awt.Color;
 
-// Define colors
+// Correct
+playerData.sendMessage(Message.raw("Success!").color(new Color(85, 255, 85)));
+
+// WRONG - shows literal "§a"
+playerData.sendMessage(Message.raw("§aSuccess!"));
+
+// Common colors
 Color GREEN = new Color(85, 255, 85);
 Color RED = new Color(255, 85, 85);
 Color YELLOW = new Color(255, 255, 85);
 Color GOLD = new Color(255, 170, 0);
 Color GRAY = new Color(170, 170, 170);
-Color AQUA = new Color(85, 255, 255);
-
-// Send colored message
-playerData.sendMessage(Message.raw("Success!").color(GREEN));
-
-// DON'T use Minecraft codes - they show as literal text:
-// playerData.sendMessage(Message.raw("§aSuccess!")); // WRONG - shows "§aSuccess!"
 ```
 
-## Teleportation
-
-Use the Teleport component:
-
+## Player Position & Teleportation
 ```java
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3f;
-import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
-
-// Must execute on world thread
-world.execute(() -> {
-    Vector3d position = new Vector3d(x, y, z);
-    Vector3f rotation = new Vector3f(yaw, pitch, 0);
-
-    Teleport teleport = new Teleport(world, position, rotation);
-    store.addComponent(playerRef, Teleport.getComponentType(), teleport);
-});
-```
-
-## Player Position
-
-Get player position via TransformComponent:
-
-```java
-import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
-
+// Get position
 TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
 Vector3d position = transform.getPosition();
 Vector3f rotation = transform.getRotation();
 
-double x = position.getX();
-double y = position.getY();
-double z = position.getZ();
-float yaw = rotation.getYaw();
-float pitch = rotation.getPitch();
-```
-
-## Permissions
-
-```java
-// Check permission
-Player player = store.getComponent(playerRef, Player.getComponentType());
-if (player.hasPermission("myplugin.admin")) {
-    // Has permission
-}
-
-// Console commands for permission management:
-// perm user add <player> <permission>
-// perm group add Adventure <permission>
-// perm group remove Adventure <permission>
+// Teleport (MUST run on world thread)
+world.execute(() -> {
+    Vector3d pos = new Vector3d(x, y, z);
+    Vector3f rot = new Vector3f(yaw, pitch, 0);
+    Teleport teleport = new Teleport(world, pos, rot);
+    store.addComponent(playerRef, Teleport.getComponentType(), teleport);
+});
 ```
 
 ## Data Storage
-
-Use `getDataDirectory()` for plugin data folder:
-
 ```java
-Path dataDir = getDataDirectory();  // plugins/YourPlugin/
-Path homesDir = dataDir.resolve("homes");
-Files.createDirectories(homesDir);
-
-// Use Gson for JSON (provided by Hytale)
-Gson gson = new GsonBuilder().setPrettyPrinting().create();
+Path dataDir = getDataDirectory();  // mods/Group_PluginName/
+Gson gson = new GsonBuilder().setPrettyPrinting().create();  // Gson provided by Hytale
 ```
 
-## Scheduling / Delayed Tasks
-
-Use Java's ScheduledExecutorService, but execute game actions on world thread:
-
-```java
-ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-
-// Schedule task
-scheduler.schedule(() -> {
-    // Run on world thread for game actions
-    world.execute(() -> {
-        // Teleport, modify entities, etc.
-    });
-}, 3, TimeUnit.SECONDS);
-
-// Don't forget to shutdown in plugin shutdown()
-scheduler.shutdown();
-```
-
-## Building
-
-### pom.xml
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-
-    <groupId>com.yourplugin</groupId>
-    <artifactId>YourPlugin</artifactId>
-    <version>1.0.0</version>
-    <packaging>jar</packaging>
-
-    <properties>
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
-
-    <dependencies>
-        <!-- Hytale Server API -->
-        <dependency>
-            <groupId>com.hypixel.hytale</groupId>
-            <artifactId>HytaleServer</artifactId>
-            <version>1.0.0</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/../../HytaleServer.jar</systemPath>
-        </dependency>
-
-        <!-- Gson (provided by Hytale) -->
-        <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.10.1</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- Annotations -->
-        <dependency>
-            <groupId>com.google.code.findbugs</groupId>
-            <artifactId>jsr305</artifactId>
-            <version>3.0.2</version>
-            <scope>provided</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.3.0</version>
-            </plugin>
-        </plugins>
-    </build>
-</project>
-```
-
-### Build Command
-
+## Building & Installation
 ```bash
 mvn clean package
+# Copy target/PluginName-1.0.0.jar to Server/mods/
 ```
 
-### Installation
-
-1. Copy JAR to `Server/mods/` folder (NOT plugins/)
-2. Start server with: `java -jar HytaleServer.jar --assets Assets.zip`
-3. Plugin loads automatically on server start
-
-## Server Commands
-
-```bash
-# Start server
-cd Server
-java -jar HytaleServer.jar --assets Assets.zip
-
-# In-game/console commands
-plugin list                          # List loaded plugins
-plugin load Group:PluginName         # Load a plugin
-plugin reload Group:PluginName       # Reload a plugin
-
-# Permissions
-perm user add <player> <permission>
-perm group add Adventure <permission>
-op add <player>                      # Make player operator
-```
-
-## Common Issues
-
-1. **"Name can't be null" error**: Use PascalCase in manifest.json (`Name` not `name`)
-2. **Plugin not loading**: Put JAR in `mods/` folder, not `plugins/`
-3. **Color codes showing as text**: Use `Message.raw().color(Color)`, not `§` codes
-4. **Teleport not working**: Must run on world thread via `world.execute()`
-5. **Class not found**: Ensure you extend `JavaPlugin`, not `PluginBase`
-6. **Build fails with Java version**: Hytale requires Java 25
-
-## Useful Imports
-
+## Key Imports
 ```java
 // Plugin
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 
+// Events
+import com.hypixel.hytale.event.EventRegistry;
+import com.hypixel.hytale.server.core.event.events.player.*;
+import com.hypixel.hytale.server.core.event.events.ecs.*;
+
+// ECS Systems
+import com.hypixel.hytale.component.system.EntityEventSystem;
+import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.component.*;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+
 // Commands
-import com.hypixel.hytale.server.core.command.system.CommandContext;
+import com.hypixel.hytale.server.core.command.system.*;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
-import com.hypixel.hytale.server.core.command.system.arguments.system.OptionalArg;
-import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
-import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 
 // Entity/Player
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.Store;
 
-// Transform/Position
-import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
+// Math
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
-
-// Teleport
-import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
+import com.hypixel.hytale.math.vector.Vector3i;
 
 // Messages
 import com.hypixel.hytale.server.core.Message;
