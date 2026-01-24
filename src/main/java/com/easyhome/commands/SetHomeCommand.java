@@ -76,7 +76,7 @@ public class SetHomeCommand extends AbstractPlayerCommand {
         PlayerHomes homes = plugin.getStorage().getHomes(playerData.getUuid());
 
         if (!homes.hasHome(homeName)) {
-            int limit = plugin.getHomeLimit(player);
+            int limit = plugin.getHomeLimit(player, playerData.getUuid());
             if (homes.getHomeCount() >= limit) {
                 playerData.sendMessage(Messages.homeLimitReached(limit));
                 return;

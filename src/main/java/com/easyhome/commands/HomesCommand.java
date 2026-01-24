@@ -46,7 +46,7 @@ public class HomesCommand extends AbstractPlayerCommand {
             return;
         }
 
-        int limit = plugin.getHomeLimit(player);
+        int limit = plugin.getHomeLimit(player, playerData.getUuid());
 
         playerData.sendMessage(Messages.homesList(homes.size(), limit));
 

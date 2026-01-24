@@ -72,9 +72,11 @@ public class HomeCommand extends AbstractPlayerCommand {
         int warmupSeconds = config.getWarmupSeconds();
         double movementThreshold = config.getMovementThreshold();
 
-        // Check for warmup bypass permission
+        // Check for warmup bypass - either via permission or via grant
         Player player = store.getComponent(playerRef, Player.getComponentType());
-        boolean bypassWarmup = player.hasPermission("homes.bypass.warmup");
+        boolean hasPermissionBypass = player.hasPermission("homes.bypass.warmup");
+        boolean hasGrantBypass = plugin.getGrantStorage().hasInstantTeleport(playerData.getUuid());
+        boolean bypassWarmup = hasPermissionBypass || hasGrantBypass;
 
         plugin.getWarmupManager().startWarmup(
                 playerData, playerRef, store, world, home,
