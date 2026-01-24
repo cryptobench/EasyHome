@@ -36,6 +36,10 @@ public class HomesCommand extends AbstractPlayerCommand {
                           @Nonnull PlayerRef playerData,
                           @Nonnull World world) {
 
+        // Update player cache for offline lookups
+        plugin.getPlayerCache().updatePlayer(playerData.getUuid(), playerData.getUsername());
+        plugin.getStorage().updateUsername(playerData.getUuid(), playerData.getUsername());
+
         Player player = store.getComponent(playerRef, Player.getComponentType());
 
         PlayerHomes playerHomes = plugin.getStorage().getHomes(playerData.getUuid());

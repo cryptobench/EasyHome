@@ -9,12 +9,15 @@ import com.easyhome.commands.SetHomeCommand;
 import com.easyhome.config.HomeConfig;
 import com.easyhome.data.GrantStorage;
 import com.easyhome.data.HomeStorage;
+import com.easyhome.data.PlayerCache;
 import com.easyhome.util.WarmupManager;
 
+import java.nio.file.Path;
 import java.util.UUID;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import com.hypixel.hytale.server.core.universe.Universe;
 
 /**
  * EasyHome - A user-friendly home management plugin for Hytale.
@@ -24,6 +27,7 @@ public class EasyHome extends JavaPlugin {
     private HomeConfig config;
     private HomeStorage storage;
     private GrantStorage grantStorage;
+    private PlayerCache playerCache;
     private WarmupManager warmupManager;
 
     public EasyHome(JavaPluginInit init) {
@@ -41,6 +45,12 @@ public class EasyHome extends JavaPlugin {
         // Initialize grant storage
         grantStorage = new GrantStorage(getDataDirectory());
 
+        // Initialize player cache for offline player lookups
+        playerCache = new PlayerCache(getDataDirectory());
+
+        // Sync player cache from existing homes data (backwards compatibility)
+        playerCache.syncFromHomeStorage(storage);
+
         // Initialize warmup manager
         warmupManager = new WarmupManager();
 
@@ -55,7 +65,16 @@ public class EasyHome extends JavaPlugin {
 
     @Override
     public void start() {
-        // Plugin started
+        // Sync player cache from server's player data (supports all players who ever joined)
+        // Universe.getPath() returns the universe/ directory, players are at universe/players/
+        try {
+            Path universePath = Universe.get().getPath();
+            if (universePath != null) {
+                playerCache.syncFromUniversePath(universePath);
+            }
+        } catch (Exception e) {
+            // Universe not ready or other error - skip server player sync
+        }
     }
 
     @Override
@@ -86,6 +105,10 @@ public class EasyHome extends JavaPlugin {
 
     public GrantStorage getGrantStorage() {
         return grantStorage;
+    }
+
+    public PlayerCache getPlayerCache() {
+        return playerCache;
     }
 
     public WarmupManager getWarmupManager() {

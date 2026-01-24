@@ -50,6 +50,10 @@ public class HomeCommand extends AbstractPlayerCommand {
                           @Nonnull PlayerRef playerData,
                           @Nonnull World world) {
 
+        // Update player cache for offline lookups
+        plugin.getPlayerCache().updatePlayer(playerData.getUuid(), playerData.getUsername());
+        plugin.getStorage().updateUsername(playerData.getUuid(), playerData.getUsername());
+
         String homeName = parseHomeName(ctx);
         if (homeName == null || homeName.isEmpty()) {
             homeName = DEFAULT_HOME_NAME;

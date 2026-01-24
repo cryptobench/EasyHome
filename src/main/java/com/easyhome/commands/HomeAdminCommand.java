@@ -253,6 +253,7 @@ public class HomeAdminCommand extends CommandBase {
     /**
      * Resolve a player identifier to a UUID.
      * Supports both username and UUID format.
+     * Works for both online and offline players.
      */
     private UUID resolvePlayer(String identifier) {
         if (identifier == null || identifier.isEmpty()) {
@@ -268,10 +269,16 @@ public class HomeAdminCommand extends CommandBase {
             }
         }
 
-        // Try to find online player by name
+        // Try to find online player by name first
         PlayerRef playerRef = Universe.get().getPlayerByUsername(identifier, NameMatching.EXACT_IGNORE_CASE);
         if (playerRef != null) {
             return playerRef.getUuid();
+        }
+
+        // Try to find offline player from cache
+        UUID cachedUuid = plugin.getPlayerCache().getUuid(identifier);
+        if (cachedUuid != null) {
+            return cachedUuid;
         }
 
         return null;
